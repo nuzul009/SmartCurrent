@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Current Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+  body {
+    margin: 0;
+    background: #f4f6f9;
+    font-family: Arial, sans-serif;
+    color: #1e293b;
+    text-align: center;
+  }
+
+  .container {
+    padding: 20px;
+  }
+
+  h1 {
+    margin-bottom: 5px;
+  }
+
+  .current-value {
+    font-size: 40px;
+    font-weight: bold;
+    margin: 10px 0;
+    color: #2563eb;
+  }
+
+  .status {
+    font-size: 18px;
+    margin-bottom: 20px;
+  }
+
+  .chart-container {
+    width: 95%;
+    margin: auto;
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+</style>
+
+</head>
+
+<body>
+  <div class="container">
+    <h1>Smart Current Monitor</h1>
+    <div class="current-value" id="arus">0.00 A</div>
+    <div class="status" id="status">MENUNGGU DATA...</div>
+
+    <div class="chart-container">
+      <canvas id="myChart"></canvas>
+    </div>
+  </div>
+
+<script>
+  // 🔥 GANTI DENGAN CONFIG FIREBASE KAMU
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "XXXX",
+    appId: "XXXX"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  const ctx = document.getElementById('myChart').getContext('2d');
+
+  let dataArus = [];
+  let labels = [];
+
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Arus (A)',
+        data: dataArus,
+        borderColor: '#00f5ff',
+        backgroundColor: 'rgba(0,245,255,0.2)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: {
+          ticks: { color: 'white' }
+        },
+        y: {
+          ticks: { color: 'white' }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: { color: 'white' }
+        }
+      }
+    }
+  });
+
+  // 🔥 Ambil data realtime dari Firebase
+  database.ref("monitoring").on("value", function(snapshot) {
+    const data = snapshot.val();
+
+    if (data) {
+      let arus = parseFloat(data.arus_rms).toFixed(2);
+      document.getElementById("arus").innerText = arus + " A";
+      document.getElementById("status").innerText = data.status;
+
+      let now = new Date().toLocaleTimeString();
+
+      if (dataArus.length > 20) {
+        dataArus.shift();
+        labels.shift();
+      }
+
+      dataArus.push(arus);
+      labels.push(now);
+      chart.update();
+    }
+  });
+</script>
+
+</body>
+</html>
