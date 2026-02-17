@@ -1,136 +1,135 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Smart Current Monitor</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<meta charset="UTF-8">
+<title>Leakage Monitor</title>
 
-  <style>
-  body {
-    margin: 0;
-    background: #f4f6f9;
-    font-family: Arial, sans-serif;
-    color: #1e293b;
-    text-align: center;
-  }
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
-  .container {
-    padding: 20px;
-  }
+<style>
+body{
+    margin:0;
+    background:#f5f7fa;
+    font-family:Arial, sans-serif;
+}
 
-  h1 {
-    margin-bottom: 5px;
-  }
+.container{
+    width:95%;
+    margin:20px auto;
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0 5px 20px rgba(0,0,0,0.08);
+}
 
-  .current-value {
-    font-size: 40px;
-    font-weight: bold;
-    margin: 10px 0;
-    color: #2563eb;
-  }
+h2{
+    text-align:center;
+    color:#333;
+}
 
-  .status {
-    font-size: 18px;
-    margin-bottom: 20px;
-  }
-
-  .chart-container {
-    width: 95%;
-    margin: auto;
-    background: #ffffff;
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  }
+canvas{
+    width:100% !important;
+    height:320px !important;
+}
 </style>
-
 </head>
 
 <body>
-  <div class="container">
-    <h1>Smart Current Monitor</h1>
-    <div class="current-value" id="arus">0.00 A</div>
-    <div class="status" id="status">MENUNGGU DATA...</div>
 
-    <div class="chart-container">
-      <canvas id="myChart"></canvas>
-    </div>
-  </div>
+<div class="container">
+    <h2>Leakage Current (A)</h2>
+    <canvas id="myChart"></canvas>
+</div>
 
 <script>
-  // 🔥 GANTI DENGAN CONFIG FIREBASE KAMU
-  const firebaseConfig = {
+
+// ================= FIREBASE CONFIG =================
+var firebaseConfig = {
     apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "XXXX",
-    appId: "XXXX"
-  };
+    databaseURL: "https://YOUR_DATABASE_URL.firebaseio.com"
+};
 
-  firebase.initializeApp(firebaseConfig);
-  const database = firebase.database();
+firebase.initializeApp(firebaseConfig);
+var database = firebase.database();
 
-  const ctx = document.getElementById('myChart').getContext('2d');
+// ================= THRESHOLD =================
+const THRESHOLD = 0.10;
 
-  let dataArus = [];
-  let labels = [];
+// ================= CHART =================
+const ctx = document.getElementById('myChart').getContext('2d');
 
-  const chart = new Chart(ctx, {
+let chart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: labels,
-      datasets: [{
-        label: 'Arus (A)',
-        data: dataArus,
-        borderColor: '#00f5ff',
-        backgroundColor: 'rgba(0,245,255,0.2)',
-        tension: 0.4,
-        fill: true
-      }]
+        labels: [],
+        datasets: [
+        {
+            label: 'Leakage Current',
+            data: [],
+            borderWidth: 3,
+            tension: 0.4,
+            fill: true,
+            backgroundColor: 'rgba(0,123,255,0.1)',
+            borderColor: 'rgba(0,123,255,1)',
+            pointRadius: 2
+        },
+        {
+            label: 'Threshold',
+            data: [],
+            borderWidth: 2,
+            borderDash: [6,6],
+            borderColor: 'red',
+            pointRadius: 0,
+            fill: false
+        }]
     },
     options: {
-      responsive: true,
-      scales: {
-        x: {
-          ticks: { color: 'white' }
-        },
-        y: {
-          ticks: { color: 'white' }
+        responsive:true,
+        scales:{
+            y:{
+                beginAtZero:true
+            }
         }
-      },
-      plugins: {
-        legend: {
-          labels: { color: 'white' }
-        }
-      }
     }
-  });
+});
 
-  // 🔥 Ambil data realtime dari Firebase
-  database.ref("monitoring").on("value", function(snapshot) {
-    const data = snapshot.val();
+// ================= ADD DATA =================
+function addData(value){
 
-    if (data) {
-      let arus = parseFloat(data.arus_rms).toFixed(2);
-      document.getElementById("arus").innerText = arus + " A";
-      document.getElementById("status").innerText = data.status;
+    let now = new Date().toLocaleTimeString();
 
-      let now = new Date().toLocaleTimeString();
+    chart.data.labels.push(now);
+    chart.data.datasets[0].data.push(value);
+    chart.data.datasets[1].data.push(THRESHOLD);
 
-      if (dataArus.length > 20) {
-        dataArus.shift();
-        labels.shift();
-      }
-
-      dataArus.push(arus);
-      labels.push(now);
-      chart.update();
+    if(chart.data.labels.length > 20){
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
     }
-  });
+
+    // Auto warna merah jika melewati threshold
+    if(value > THRESHOLD){
+        chart.data.datasets[0].borderColor = "red";
+        chart.data.datasets[0].backgroundColor = "rgba(255,0,0,0.15)";
+    } else {
+        chart.data.datasets[0].borderColor = "rgba(0,123,255,1)";
+        chart.data.datasets[0].backgroundColor = "rgba(0,123,255,0.1)";
+    }
+
+    chart.update();
+}
+
+// ================= REALTIME FIREBASE =================
+database.ref("/monitor/arus_bocor").on("value", function(snapshot){
+    let leakValue = snapshot.val();
+    if(leakValue !== null){
+        addData(parseFloat(leakValue));
+    }
+});
+
 </script>
 
 </body>
