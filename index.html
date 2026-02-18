@@ -1,137 +1,96 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Leakage Monitor</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-<style>
-body{
-    margin:0;
-    background:#f5f7fa;
-    font-family:Arial, sans-serif;
-}
-
-.container{
-    width:95%;
-    margin:20px auto;
-    background:white;
-    padding:20px;
-    border-radius:15px;
-    box-shadow:0 5px 20px rgba(0,0,0,0.08);
-}
-
-h2{
-    text-align:center;
-    color:#333;
-}
-
-canvas{
-    width:100% !important;
-    height:320px !important;
-}
-</style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <style>
+        body { background-color: #121212; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; overflow: hidden; }
+        .container { display: flex; flex-direction: column; align-items: center; }
+        .current-value { font-size: 24px; color: #00e5ff; margin-bottom: 10px; font-weight: bold; }
+        .chart-wrapper { position: relative; height: 70vh; width: 100%; }
+    </style>
 </head>
-
 <body>
 
-<div class="container">
-    <h2>Leakage Current (A)</h2>
-    <canvas id="myChart"></canvas>
-</div>
+    <div class="container">
+        <div class="current-value" id="valDisplay">0.000 A</div>
+        <div class="chart-wrapper">
+            <canvas id="leakChart"></canvas>
+        </div>
+    </div>
 
-<script>
+    <script>
+        // --- KONFIGURASI FIREBASE ---
+        // Ganti dengan data dari Firebase Console -> Project Settings
+        const firebaseConfig = {
+            apiKey: "AIzaSy...",
+            authDomain: "project-kamu.firebaseapp.com",
+            databaseURL: "https://project-kamu-default-rtdb.firebaseio.com",
+            projectId: "project-kamu",
+            storageBucket: "project-kamu.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:12345:web:abcde"
+        };
 
-// ================= FIREBASE CONFIG =================
-var firebaseConfig = {
-    apiKey: "AIzaSyC1fKVZng5KJd3vKCKDFzYbaFo-7JJFLAA",
-    databaseURL: "https://arusbocor-d1623-default-rtdb.firebaseio.com/"
-};
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-firebase.initializeApp(firebaseConfig);
-var database = firebase.database();
+        // --- SETUP CHART ---
+        const ctx = document.getElementById('leakChart').getContext('2d');
+        let dataPoints = [];
+        let labels = [];
 
-// ================= THRESHOLD =================
-const THRESHOLD = 0.10;
-
-// ================= CHART =================
-const ctx = document.getElementById('myChart').getContext('2d');
-
-let chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [
-        {
-            label: 'Leakage Current',
-            data: [],
-            borderWidth: 3,
-            tension: 0.4,
-            fill: true,
-            backgroundColor: 'rgba(0,123,255,0.1)',
-            borderColor: 'rgba(0,123,255,1)',
-            pointRadius: 2
-        },
-        {
-            label: 'Threshold',
-            data: [],
-            borderWidth: 2,
-            borderDash: [6,6],
-            borderColor: 'red',
-            pointRadius: 0,
-            fill: false
-        }]
-    },
-    options: {
-        responsive:true,
-        scales:{
-            y:{
-                beginAtZero:true
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Arus Bocor (A)',
+                    data: dataPoints,
+                    borderColor: '#00e5ff',
+                    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 3,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        suggestedMax: 0.1, // Skala awal 0.1 Ampere
+                        grid: { color: '#2c2c2c' },
+                        ticks: { color: '#888', callback: (value) => value + ' A' }
+                    },
+                    x: { display: false }
+                },
+                plugins: { legend: { display: false } }
             }
-        }
-    }
-});
+        });
 
-// ================= ADD DATA =================
-function addData(value){
+        // --- LISTEN FIREBASE REAL-TIME ---
+        // Asumsi data disimpan di path "monitoring/arus"
+        db.ref('monitoring/arus').on('value', (snapshot) => {
+            const rawValue = snapshot.val();
+            const value = parseFloat(rawValue).toFixed(3); // Ambil 3 angka di belakang koma (mA ke A)
+            
+            document.getElementById('valDisplay').innerText = value + " A";
 
-    let now = new Date().toLocaleTimeString();
+            if (dataPoints.length > 25) {
+                dataPoints.shift();
+                labels.shift();
+            }
 
-    chart.data.labels.push(now);
-    chart.data.datasets[0].data.push(value);
-    chart.data.datasets[1].data.push(THRESHOLD);
-
-    if(chart.data.labels.length > 20){
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
-        chart.data.datasets[1].data.shift();
-    }
-
-    // Auto warna merah jika melewati threshold
-    if(value > THRESHOLD){
-        chart.data.datasets[0].borderColor = "red";
-        chart.data.datasets[0].backgroundColor = "rgba(255,0,0,0.15)";
-    } else {
-        chart.data.datasets[0].borderColor = "rgba(0,123,255,1)";
-        chart.data.datasets[0].backgroundColor = "rgba(0,123,255,0.1)";
-    }
-
-    chart.update();
-}
-
-// ================= REALTIME FIREBASE =================
-database.ref("/monitor/arus_bocor").on("value", function(snapshot){
-    let leakValue = snapshot.val();
-    if(leakValue !== null){
-        addData(parseFloat(leakValue));
-    }
-});
-
-</script>
-
+            dataPoints.push(value);
+            labels.push(new Date().toLocaleTimeString());
+            chart.update('none'); // Update tanpa animasi transisi agar lebih ringan
+        });
+    </script>
 </body>
 </html>
-
