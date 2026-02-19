@@ -76,7 +76,7 @@
 
         // --- LISTEN FIREBASE REAL-TIME ---
         // Asumsi data disimpan di path "monitoring/arus"
-        db.ref('monitoring/arus').on('value', (snapshot) => {
+        db.ref('monitor/arus_bocor').on('value', (snapshot) => {
             const rawValue = snapshot.val();
             const value = parseFloat(rawValue).toFixed(3); // Ambil 3 angka di belakang koma (mA ke A)
             
@@ -94,4 +94,5 @@
     </script>
 </body>
 </html>
+
 
